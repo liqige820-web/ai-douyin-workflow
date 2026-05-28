@@ -1,0 +1,967 @@
+{
+  "name": "每日 AI 抖音短视频草稿",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Schedule Trigger 每天8点",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "run-date",
+              "name": "run_date",
+              "value": "={{ $now.setZone('Asia/Shanghai').toFormat('yyyy-LL-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "run-id",
+              "name": "run_id",
+              "value": "={{ 'ai-douyin-' + $now.setZone('Asia/Shanghai').toFormat('yyyyLLdd-HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "timezone",
+              "name": "timezone",
+              "value": "Asia/Shanghai",
+              "type": "string"
+            },
+            {
+              "id": "manual-review",
+              "name": "manual_review_required",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "video-width",
+              "name": "video_width",
+              "value": 1080,
+              "type": "number"
+            },
+            {
+              "id": "video-height",
+              "name": "video_height",
+              "value": 1920,
+              "type": "number"
+            },
+            {
+              "id": "duration",
+              "name": "target_duration_seconds",
+              "value": 60,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a2222222-2222-4222-8222-222222222222",
+      "name": "初始化配置",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $vars.OPENAI_RESPONSES_MODEL || 'gpt-4.1-mini', tools: [{ type: 'web_search' }], tool_choice: 'auto', include: ['web_search_call.action.sources'], input: '今天是北京时间 ' + $json.run_date + '。请联网搜索今天和最近72小时内的人工智能热点，生成5个适合抖音60秒短视频的中文选题。要求：1）事实必须附来源链接；2）不编造；3）不要出现微信、手机号、QQ群、邮箱等站外联系方式；4）不要自动发布；5）每个选题给出0-100分评分。只输出JSON，不要Markdown。JSON格式：{\"topics\":[{\"topic\":\"\",\"angle\":\"\",\"target_audience\":\"\",\"why_now\":\"\",\"score\":0,\"risk_note\":\"\",\"search_keywords\":[\"\"],\"source_links\":[{\"title\":\"\",\"url\":\"\",\"publisher\":\"\",\"published_at\":\"\"}]}]}' }) }}"
+      },
+      "id": "a3333333-3333-4333-8333-333333333333",
+      "name": "OpenAI 搜索并生成5个选题",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1660,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function responseText(resp) {\n  if (typeof resp.output_text === 'string') return resp.output_text;\n  if (!Array.isArray(resp.output)) return '';\n  return resp.output.map((item) => {\n    if (!Array.isArray(item.content)) return '';\n    return item.content.map((c) => c.text || c.output_text || '').join('');\n  }).join('');\n}\n\nfunction parseLooseJson(text) {\n  const cleaned = String(text || '')\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```$/i, '')\n    .trim();\n  try {\n    return JSON.parse(cleaned);\n  } catch (error) {\n    const start = cleaned.indexOf('{');\n    const end = cleaned.lastIndexOf('}');\n    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));\n    throw error;\n  }\n}\n\nconst cfg = $node['初始化配置'].json;\nconst rawText = responseText($json);\nconst parsed = parseLooseJson(rawText);\nconst topics = Array.isArray(parsed.topics) ? parsed.topics : [];\nif (topics.length === 0) throw new Error('OpenAI没有返回topics数组，请打开上一个节点查看原始输出。');\n\nconst normalized = topics.map((topic, index) => ({\n  rank: index + 1,\n  topic: topic.topic || topic['选题'] || '',\n  angle: topic.angle || topic['切入角度'] || '',\n  target_audience: topic.target_audience || topic['目标观众'] || '',\n  why_now: topic.why_now || topic['为什么现在发'] || '',\n  score: Number(topic.score || topic['评分'] || 0),\n  risk_note: topic.risk_note || topic['风险提示'] || '',\n  search_keywords: Array.isArray(topic.search_keywords) ? topic.search_keywords : [],\n  source_links: Array.isArray(topic.source_links) ? topic.source_links : []\n}));\n\nnormalized.sort((a, b) => b.score - a.score);\nconst selected = normalized[0];\nreturn [{\n  json: {\n    ...cfg,\n    topics: normalized,\n    selected_topic: selected,\n    topic_count: normalized.length,\n    source_links: selected.source_links || []\n  }\n}];"
+      },
+      "id": "a4444444-4444-4444-8444-444444444444",
+      "name": "选择评分最高选题",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1420,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $vars.OPENAI_RESPONSES_MODEL || 'gpt-4.1-mini', tools: [{ type: 'web_search' }], tool_choice: 'auto', include: ['web_search_call.action.sources'], input: '请基于这个已选抖音选题生成60秒短视频草稿，并再次联网核验关键事实。已选选题：' + JSON.stringify($json.selected_topic) + '。硬性规则：标题、字幕、口播、封面文案、评论区引导语都不能出现微信号、手机号、QQ、QQ群、邮箱、Telegram、WhatsApp、加我、进群、私信领资料等站外联系方式；不自动发布；事实必须保留来源链接；素材关键词必须适合在Pexels/Pixabay搜索授权视频。只输出JSON，不要Markdown。JSON格式：{\"script_id\":\"\",\"topic\":\"\",\"voiceover\":\"约60秒中文口播\",\"subtitle_text\":\"完整字幕文案\",\"subtitle_blocks\":[{\"start\":0,\"end\":6,\"text\":\"\"}],\"titles\":[\"标题1\",\"标题2\",\"标题3\"],\"cover_text\":\"封面文案，不超过18字\",\"comment_guide\":\"评论区引导语，只引导站内评论，不引导私信和外部联系\",\"storyboard\":[{\"time\":\"0-5s\",\"visual\":\"\"}],\"material_keywords\":[\"ai technology\",\"robotics\",\"data center\"],\"facts\":[{\"claim\":\"\",\"source_url\":\"\",\"source_title\":\"\"}],\"risk_notes\":[\"\"]}' }) }}"
+      },
+      "id": "a5555555-5555-4555-8555-555555555555",
+      "name": "OpenAI 生成脚本标题封面",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1180,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function responseText(resp) {\n  if (typeof resp.output_text === 'string') return resp.output_text;\n  if (!Array.isArray(resp.output)) return '';\n  return resp.output.map((item) => {\n    if (!Array.isArray(item.content)) return '';\n    return item.content.map((c) => c.text || c.output_text || '').join('');\n  }).join('');\n}\n\nfunction parseLooseJson(text) {\n  const cleaned = String(text || '')\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```$/i, '')\n    .trim();\n  try {\n    return JSON.parse(cleaned);\n  } catch (error) {\n    const start = cleaned.indexOf('{');\n    const end = cleaned.lastIndexOf('}');\n    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));\n    throw error;\n  }\n}\n\nconst forbidden = /(微信|weixin|wechat|vx|v信|手机号|电话|QQ|QQ群|邮箱|email|Telegram|WhatsApp|加我|进群|私信领资料|扫码)/i;\nconst selected = $node['选择评分最高选题'].json;\nconst parsed = parseLooseJson(responseText($json));\nconst joined = JSON.stringify(parsed);\nconst hasForbiddenContact = forbidden.test(joined);\nconst facts = Array.isArray(parsed.facts) ? parsed.facts : [];\nconst sourceLinks = facts.map((fact) => fact.source_url).filter(Boolean);\nconst selectedSources = (selected.source_links || []).map((s) => s.url).filter(Boolean);\nconst allSources = Array.from(new Set([...sourceLinks, ...selectedSources]));\nconst keywords = Array.isArray(parsed.material_keywords) && parsed.material_keywords.length > 0\n  ? parsed.material_keywords\n  : (selected.selected_topic.search_keywords || ['artificial intelligence technology']);\nconst scriptId = parsed.script_id || selected.run_id;\n\nreturn [{\n  json: {\n    ...selected,\n    script_id: scriptId,\n    script: parsed,\n    voiceover: parsed.voiceover || '',\n    subtitle_text: parsed.subtitle_text || '',\n    subtitle_blocks: Array.isArray(parsed.subtitle_blocks) ? parsed.subtitle_blocks : [],\n    titles: Array.isArray(parsed.titles) ? parsed.titles : [],\n    cover_text: parsed.cover_text || '',\n    comment_guide: parsed.comment_guide || '',\n    storyboard: Array.isArray(parsed.storyboard) ? parsed.storyboard : [],\n    material_keywords: keywords,\n    search_query: keywords[0] || 'artificial intelligence technology',\n    facts,\n    all_source_links: allSources,\n    compliance: {\n      has_forbidden_contact: hasForbiddenContact,\n      source_count: allSources.length,\n      manual_review_required: true,\n      status: hasForbiddenContact || allSources.length < 2 ? '需要人工修改' : '待人工审核'\n    }\n  }\n}];"
+      },
+      "id": "a6666666-6666-4666-8666-666666666666",
+      "name": "解析脚本并合规检查",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -940,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.pexels.com/videos/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.search_query }}"
+            },
+            {
+              "name": "orientation",
+              "value": "portrait"
+            },
+            {
+              "name": "per_page",
+              "value": "5"
+            },
+            {
+              "name": "size",
+              "value": "large"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $vars.PEXELS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7777777-7777-4777-8777-777777777777",
+      "name": "Pexels 搜索授权视频",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -700,
+        140
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://pixabay.com/api/videos/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $vars.PIXABAY_API_KEY }}"
+            },
+            {
+              "name": "q",
+              "value": "={{ $('解析脚本并合规检查').first().json.search_query }}"
+            },
+            {
+              "name": "lang",
+              "value": "zh"
+            },
+            {
+              "name": "per_page",
+              "value": "5"
+            },
+            {
+              "name": "safesearch",
+              "value": "true"
+            },
+            {
+              "name": "min_width",
+              "value": "720"
+            },
+            {
+              "name": "min_height",
+              "value": "1280"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a8888888-8888-4888-8888-888888888888",
+      "name": "Pixabay 搜索授权视频",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        140
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $node['解析脚本并合规检查'].json;\nconst pexels = $node['Pexels 搜索授权视频'].json || {};\nconst pixabay = $node['Pixabay 搜索授权视频'].json || {};\n\nfunction choosePexelsVideo(data) {\n  const videos = Array.isArray(data.videos) ? data.videos : [];\n  if (!videos.length) return null;\n  const video = videos[0];\n  const files = Array.isArray(video.video_files) ? video.video_files : [];\n  const mp4s = files.filter((f) => String(f.file_type || '').includes('mp4') || String(f.link || '').includes('.mp4'));\n  const sorted = mp4s.sort((a, b) => (b.height || 0) - (a.height || 0));\n  const file = sorted.find((f) => (f.height || 0) >= 1280) || sorted[0] || files[0];\n  if (!file || !file.link) return null;\n  return {\n    platform: 'Pexels',\n    asset_id: String(video.id || ''),\n    asset_type: 'video',\n    page_url: video.url || '',\n    download_url: file.link,\n    author: video.user && video.user.name ? video.user.name : '',\n    author_url: video.user && video.user.url ? video.user.url : '',\n    license_url: 'https://www.pexels.com/license/',\n    search_keyword: base.search_query\n  };\n}\n\nfunction choosePixabayVideo(data) {\n  const hits = Array.isArray(data.hits) ? data.hits : [];\n  if (!hits.length) return null;\n  const hit = hits[0];\n  const variants = hit.videos || {};\n  const selected = variants.large || variants.medium || variants.small || variants.tiny || {};\n  if (!selected.url) return null;\n  return {\n    platform: 'Pixabay',\n    asset_id: String(hit.id || ''),\n    asset_type: 'video',\n    page_url: hit.pageURL || '',\n    download_url: selected.url,\n    author: hit.user || '',\n    author_url: hit.user_id ? 'https://pixabay.com/users/' + hit.user + '-' + hit.user_id + '/' : '',\n    license_url: 'https://pixabay.com/service/license-summary/',\n    search_keyword: base.search_query\n  };\n}\n\nconst material = choosePexelsVideo(pexels) || choosePixabayVideo(pixabay);\nreturn [{\n  json: {\n    ...base,\n    material: material || {\n      platform: '',\n      asset_id: '',\n      asset_type: 'video',\n      page_url: '',\n      download_url: '',\n      author: '',\n      author_url: '',\n      license_url: '',\n      search_keyword: base.search_query\n    },\n    material_status: material ? '素材已找到' : '素材未找到'\n  }\n}];"
+      },
+      "id": "a9999999-9999-4999-8999-999999999999",
+      "name": "选择授权素材",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $vars.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', voice: $vars.OPENAI_TTS_VOICE || 'coral', input: $json.voiceover, response_format: 'mp3' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "audio"
+            }
+          }
+        }
+      },
+      "id": "b1111111-1111-4111-8111-111111111111",
+      "name": "OpenAI TTS 生成配音",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.cloudinary.com/v1_1/' + $vars.CLOUDINARY_CLOUD_NAME + '/video/upload' }}",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "audio"
+            },
+            {
+              "name": "upload_preset",
+              "value": "={{ $vars.CLOUDINARY_UPLOAD_PRESET }}"
+            },
+            {
+              "name": "folder",
+              "value": "douyin-ai-audio"
+            },
+            {
+              "name": "public_id",
+              "value": "={{ $('选择授权素材').first().json.script_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2222222-2222-4222-8222-222222222222",
+      "name": "上传配音到 Cloudinary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $node['选择授权素材'].json;\nconst cloudinary = $node['上传配音到 Cloudinary'].json || {};\nconst audioUrl = cloudinary.secure_url || cloudinary.url || '';\nconst material = base.material || {};\nconst blocks = Array.isArray(base.subtitle_blocks) && base.subtitle_blocks.length\n  ? base.subtitle_blocks\n  : [{ start: 0, end: 60, text: base.subtitle_text || base.voiceover || '' }];\n\nconst subtitleElements = blocks.slice(0, 12).map((block) => ({\n  type: 'text',\n  time: Number(block.start || 0),\n  duration: Math.max(2, Number(block.end || 0) - Number(block.start || 0) || 5),\n  text: String(block.text || '').slice(0, 80),\n  x: '50%',\n  y: '82%',\n  width: '88%',\n  height: '16%',\n  fill_color: '#ffffff',\n  font_size: 46,\n  font_weight: '700',\n  text_align: 'center',\n  stroke_color: '#000000',\n  stroke_width: 2\n}));\n\nconst renderScript = {\n  output_format: 'mp4',\n  width: 1080,\n  height: 1920,\n  duration: 60,\n  frame_rate: 30,\n  elements: [\n    {\n      type: 'video',\n      source: material.download_url,\n      duration: 60,\n      width: '100%',\n      height: '100%',\n      fit: 'cover'\n    },\n    {\n      type: 'audio',\n      source: audioUrl\n    },\n    {\n      type: 'text',\n      time: 0,\n      duration: 4,\n      text: base.cover_text || (base.titles[0] || base.selected_topic.topic || '').slice(0, 18),\n      x: '50%',\n      y: '18%',\n      width: '86%',\n      height: '18%',\n      fill_color: '#ffffff',\n      font_size: 72,\n      font_weight: '800',\n      text_align: 'center',\n      stroke_color: '#000000',\n      stroke_width: 3\n    },\n    ...subtitleElements\n  ]\n};\n\nreturn [{\n  json: {\n    ...base,\n    audio_public_url: audioUrl,\n    tts_status: audioUrl ? '配音完成' : '配音上传失败',\n    render_script: renderScript\n  }\n}];"
+      },
+      "id": "b3333333-3333-4333-8333-333333333333",
+      "name": "准备 Creatomate RenderScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.creatomate.com/v2/renders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.CREATOMATE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.render_script) }}",
+        "options": {}
+      },
+      "id": "b4444444-4444-4444-8444-444444444444",
+      "name": "Creatomate 合成竖版视频",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "b5555555-5555-4555-8555-555555555555",
+      "name": "等待 Creatomate 2分钟",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.creatomate.com/v2/renders/' + (($node['Creatomate 合成竖版视频'].json.id) || ($node['Creatomate 合成竖版视频'].json[0] && $node['Creatomate 合成竖版视频'].json[0].id) || '') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.CREATOMATE_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b6666666-6666-4666-8666-666666666666",
+      "name": "Creatomate 查询渲染状态",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        260
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $node['准备 Creatomate RenderScript'].json;\nconst submitted = $node['Creatomate 合成竖版视频'].json || {};\nconst statusResponse = $node['Creatomate 查询渲染状态'].json || {};\nconst submitRender = Array.isArray(submitted) ? submitted[0] : submitted;\nconst statusRender = Array.isArray(statusResponse) ? statusResponse[0] : statusResponse;\nconst render = statusRender && statusRender.id ? statusRender : submitRender;\nconst titles = base.titles || [];\nconst videoStatus = render.status === 'succeeded' ? '待人工审核' : (render.status || 'render_submitted');\nconst reviewStatus = base.compliance && base.compliance.status ? base.compliance.status : '待人工审核';\nconst remarks = [];\nif (base.compliance && base.compliance.has_forbidden_contact) remarks.push('合规检查发现疑似站外联系方式，请人工修改。');\nif (base.compliance && base.compliance.source_count < 2) remarks.push('事实来源少于2条，请人工补充来源。');\nif (base.material_status !== '素材已找到') remarks.push('授权素材未找到，请人工补充。');\nif (render.status && render.status !== 'succeeded') remarks.push('Creatomate当前状态：' + render.status + '，如果仍在渲染请稍后手动查看。');\nif (render.error_message) remarks.push('Creatomate错误：' + render.error_message);\n\nreturn [{\n  json: {\n    script_id: base.script_id,\n    date: base.run_date,\n    topic: base.selected_topic.topic,\n    angle: base.selected_topic.angle,\n    target_audience: base.selected_topic.target_audience,\n    score: base.selected_topic.score,\n    voiceover: base.voiceover,\n    subtitle_text: base.subtitle_text,\n    title_1: titles[0] || '',\n    title_2: titles[1] || '',\n    title_3: titles[2] || '',\n    cover_text: base.cover_text,\n    comment_guide: base.comment_guide,\n    storyboard: JSON.stringify(base.storyboard || []),\n    source_links: (base.all_source_links || []).join('\\n'),\n    facts: JSON.stringify(base.facts || []),\n    material_platform: base.material.platform,\n    material_asset_id: base.material.asset_id,\n    material_page_url: base.material.page_url,\n    material_download_url: base.material.download_url,\n    material_author: base.material.author,\n    material_license_url: base.material.license_url,\n    tts_status: base.tts_status,\n    audio_public_url: base.audio_public_url,\n    creatomate_render_id: render.id || '',\n    creatomate_status: render.status || '',\n    video_url: render.url || '',\n    snapshot_url: render.snapshot_url || '',\n    video_status: videoStatus,\n    review_status: reviewStatus,\n    publish_status: '未发布',\n    remarks: remarks.join(' '),\n    manual_review_checklist: [\n      '事实是否都有来源链接',\n      '来源是否可信且能打开',\n      '素材是否来自Pexels/Pixabay并记录授权链接',\n      '标题/字幕/口播/封面是否无站外联系方式',\n      '配音是否自然',\n      '视频是否1080x1920竖版',\n      '是否适合人工发布'\n    ].join('\\n')\n  }\n}];"
+      },
+      "id": "b7777777-7777-4777-8777-777777777777",
+      "name": "整理最终结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.GOOGLE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "视频草稿",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "脚本ID": "={{ $json.script_id }}",
+            "日期": "={{ $json.date }}",
+            "选题": "={{ $json.topic }}",
+            "口播脚本": "={{ $json.voiceover }}",
+            "字幕文案": "={{ $json.subtitle_text }}",
+            "标题候选1": "={{ $json.title_1 }}",
+            "标题候选2": "={{ $json.title_2 }}",
+            "标题候选3": "={{ $json.title_3 }}",
+            "封面文案": "={{ $json.cover_text }}",
+            "画面分镜": "={{ $json.storyboard }}",
+            "配音文本": "={{ $json.voiceover }}",
+            "OpenAI配音状态": "={{ $json.tts_status }}",
+            "音频链接或路径": "={{ $json.audio_public_url }}",
+            "Creatomate模板ID": "RenderScript",
+            "Creatomate渲染ID": "={{ $json.creatomate_render_id }}",
+            "视频链接或路径": "={{ $json.video_url }}",
+            "视频状态": "={{ $json.video_status }}",
+            "审核状态": "={{ $json.review_status }}",
+            "发布状态": "={{ $json.publish_status }}",
+            "备注": "={{ '素材：' + $json.material_platform + ' ' + $json.material_page_url + '\\n来源：\\n' + $json.source_links + '\\n审核清单：\\n' + $json.manual_review_checklist + '\\n备注：' + $json.remarks }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "b8888888-8888-4888-8888-888888888888",
+      "name": "写入 Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1700,
+        260
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_SHEETS_CREDENTIAL",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $node['整理最终结果'].json;\nconst text = [\n  '【每日AI抖音草稿待审核】',\n  '日期：' + result.date,\n  '选题：' + result.topic,\n  '标题1：' + result.title_1,\n  '视频状态：' + result.video_status,\n  '审核状态：' + result.review_status,\n  '视频链接：' + (result.video_url || 'Creatomate仍在渲染，请稍后查看Render ID：' + result.creatomate_render_id),\n  '素材来源：' + result.material_platform + ' ' + result.material_page_url,\n  '事实来源：\\n' + result.source_links,\n  '发布前请人工审核，不要自动发布抖音。'\n].join('\\n');\nreturn [{ json: { ...result, notification_text: text } }];"
+      },
+      "id": "b9999999-9999-4999-8999-999999999999",
+      "name": "生成审核通知内容",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "if-feishu",
+              "leftValue": "={{ ($vars.NOTIFY_CHANNEL || 'feishu').toLowerCase() }}",
+              "rightValue": "feishu",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1111111-1111-4111-8111-111111111111",
+      "name": "是否飞书通知",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2180,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.FEISHU_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ msg_type: 'text', content: { text: $json.notification_text } }) }}",
+        "options": {}
+      },
+      "id": "c2222222-2222-4222-8222-222222222222",
+      "name": "飞书通知审核",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "if-wecom",
+              "leftValue": "={{ ($vars.NOTIFY_CHANNEL || 'feishu').toLowerCase() }}",
+              "rightValue": "wecom",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3333333-3333-4333-8333-333333333333",
+      "name": "是否企业微信通知",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2420,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.WECOM_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ msgtype: 'text', text: { content: $json.notification_text } }) }}",
+        "options": {}
+      },
+      "id": "c4444444-4444-4444-8444-444444444444",
+      "name": "企业微信通知审核",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2660,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "if-email",
+              "leftValue": "={{ ($vars.NOTIFY_CHANNEL || 'feishu').toLowerCase() }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c5555555-5555-4555-8555-555555555555",
+      "name": "是否邮箱通知",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2660,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.EMAIL_FROM }}",
+        "toEmail": "={{ $vars.EMAIL_TO }}",
+        "subject": "={{ '每日AI抖音草稿待审核 - ' + $json.date }}",
+        "text": "={{ $json.notification_text }}",
+        "options": {}
+      },
+      "id": "c6666666-6666-4666-8666-666666666666",
+      "name": "邮箱通知审核",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2900,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_WITH_SMTP_CREDENTIAL",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c7777777-7777-4777-8777-777777777777",
+      "name": "未配置通知通道",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2900,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger 每天8点": {
+      "main": [
+        [
+          {
+            "node": "初始化配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "初始化配置": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 搜索并生成5个选题",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 搜索并生成5个选题": {
+      "main": [
+        [
+          {
+            "node": "选择评分最高选题",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "选择评分最高选题": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 生成脚本标题封面",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 生成脚本标题封面": {
+      "main": [
+        [
+          {
+            "node": "解析脚本并合规检查",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析脚本并合规检查": {
+      "main": [
+        [
+          {
+            "node": "Pexels 搜索授权视频",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pexels 搜索授权视频": {
+      "main": [
+        [
+          {
+            "node": "Pixabay 搜索授权视频",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pixabay 搜索授权视频": {
+      "main": [
+        [
+          {
+            "node": "选择授权素材",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "选择授权素材": {
+      "main": [
+        [
+          {
+            "node": "OpenAI TTS 生成配音",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI TTS 生成配音": {
+      "main": [
+        [
+          {
+            "node": "上传配音到 Cloudinary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "上传配音到 Cloudinary": {
+      "main": [
+        [
+          {
+            "node": "准备 Creatomate RenderScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备 Creatomate RenderScript": {
+      "main": [
+        [
+          {
+            "node": "Creatomate 合成竖版视频",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate 合成竖版视频": {
+      "main": [
+        [
+          {
+            "node": "等待 Creatomate 2分钟",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "等待 Creatomate 2分钟": {
+      "main": [
+        [
+          {
+            "node": "Creatomate 查询渲染状态",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate 查询渲染状态": {
+      "main": [
+        [
+          {
+            "node": "整理最终结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理最终结果": {
+      "main": [
+        [
+          {
+            "node": "写入 Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "写入 Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "生成审核通知内容",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "生成审核通知内容": {
+      "main": [
+        [
+          {
+            "node": "是否飞书通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否飞书通知": {
+      "main": [
+        [
+          {
+            "node": "飞书通知审核",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "是否企业微信通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否企业微信通知": {
+      "main": [
+        [
+          {
+            "node": "企业微信通知审核",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "是否邮箱通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否邮箱通知": {
+      "main": [
+        [
+          {
+            "node": "邮箱通知审核",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "未配置通知通道",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "Asia/Shanghai",
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-28T00:00:00.000Z",
+  "versionId": "daily-ai-douyin-draft-v1"
+}
