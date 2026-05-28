@@ -1,5 +1,9 @@
 {
+  "createdAt": "2026-05-28T00:00:00.000Z",
+  "updatedAt": "2026-05-28T00:00:00.000Z",
+  "id": "testGoogleSheetsConnection",
   "name": "00_测试GoogleSheets连接",
+  "active": false,
   "nodes": [
     {
       "parameters": {},
@@ -52,7 +56,6 @@
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }
@@ -76,8 +79,10 @@
     "executionOrder": "v1"
   },
   "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2026-05-28T00:00:00.000Z",
   "versionId": "33333333-3333-4333-8333-333333333333"
 }
