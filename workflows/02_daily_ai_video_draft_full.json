@@ -1,0 +1,1045 @@
+{
+  "name": "02_每日AI视频草稿全流程",
+  "active": false,
+  "nodes": [
+    {
+      "id": "02000000-0000-4000-8000-000000000001",
+      "name": "手动测试触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1900,
+        180
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000002",
+      "name": "Schedule Trigger 每天8点15",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1900,
+        420
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "15 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000003",
+      "name": "初始化配置",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1660,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "run-date",
+              "name": "run_date",
+              "value": "={{ $now.setZone('Asia/Shanghai').toFormat('yyyy-LL-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "run-time",
+              "name": "run_time",
+              "value": "={{ $now.setZone('Asia/Shanghai').toFormat('HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "run-id",
+              "name": "run_id",
+              "value": "={{ 'ai-video-' + $now.setZone('Asia/Shanghai').toFormat('yyyyLLdd-HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "timezone",
+              "name": "timezone",
+              "value": "Asia/Shanghai",
+              "type": "string"
+            },
+            {
+              "id": "spreadsheet_id",
+              "name": "spreadsheet_id",
+              "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+              "type": "string"
+            },
+            {
+              "id": "template_id",
+              "name": "template_id",
+              "value": "0101aa30-f8b6-4f1d-b874-091ca8b48e00",
+              "type": "string"
+            },
+            {
+              "id": "video_folder_id",
+              "name": "video_folder_id",
+              "value": "1lNIHLzh2K8VQpmR1-mI2Sm1VaJABLfSR",
+              "type": "string"
+            },
+            {
+              "id": "audio_folder_id",
+              "name": "audio_folder_id",
+              "value": "15Aq6nugl8cuYvNOtRu5Vu6SJeFduuBJt",
+              "type": "string"
+            },
+            {
+              "id": "report_folder_id",
+              "name": "report_folder_id",
+              "value": "18xvrfkSqsBPMcXQXjwuav2OZ4S1sTIlw",
+              "type": "string"
+            },
+            {
+              "id": "manual-review",
+              "name": "manual_review_required",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000004",
+      "name": "OpenAI 生成选题脚本包",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1420,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5-mini', tools: [{ type: 'web_search', search_context_size: 'medium', user_location: { type: 'approximate', country: 'CN', timezone: 'Asia/Shanghai' } }], tool_choice: 'auto', include: ['web_search_call.action.sources'], max_output_tokens: 7000, instructions: '你是中文AI短视频自动化编导。必须联网核验事实，保留来源链接；只输出可解析JSON，不要Markdown；不能出现微信号、手机号、QQ群、邮箱、Telegram、WhatsApp、加我、进群、私信领资料等站外联系方式；不能承诺赚钱、暴富、保收益；不能编造事实。', input: '今天是北京时间 ' + $json.run_date + '。请搜索今天和最近72小时人工智能热点，生成5个适合抖音45-60秒知识短视频的选题，选择总分最高的1个，并为它生成完整脚本。评分规则：热度分0-100，转化价值分0-100，总分=热度分*0.6+转化价值分*0.4。返回JSON格式：{\"topics\":[{\"日期\":\"' + $json.run_date + '\",\"选题ID\":\"AI-' + $json.run_date.replace(/-/g, '') + '-01\",\"选题标题\":\"\",\"角度\":\"\",\"目标人群\":\"\",\"热点来源URL\":\"多个URL用换行分隔\",\"热点摘要\":\"\",\"热度分\":0,\"转化价值分\":0,\"总分\":0,\"状态\":\"待生成视频\"}],\"selected_topic_id\":\"\",\"selection_reason\":\"\",\"script\":{\"日期\":\"' + $json.run_date + '\",\"脚本ID\":\"SCRIPT-' + $json.run_date.replace(/-/g, '') + '-01\",\"选题ID\":\"\",\"选题标题\":\"\",\"开头钩子\":\"0-3秒强钩子\",\"正文脚本\":\"3-10秒痛点；10-40秒3个观点；40-52秒案例；52-60秒评论区引导。完整中文口播。\",\"结尾引导\":\"只引导站内评论\",\"标题\":\"\",\"封面文案\":\"18字内\",\"评论区引导语\":\"只引导评论区互动\",\"事实来源URL\":\"多个URL用换行分隔\",\"合规风险\":\"\",\"状态\":\"待人工审核\"},\"material_keywords\":[\"artificial intelligence technology\",\"robotics\",\"data center\"]}' }) }}"
+      },
+      "credentials": {
+        "openAiApi": {
+          "name": "OPENAI API KEY"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000005",
+      "name": "解析AI生成包",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1180,
+        300
+      ],
+      "parameters": {
+        "jsCode": "function textFromResponse(resp) {\n  if (typeof resp.output_text === 'string') return resp.output_text;\n  if (!Array.isArray(resp.output)) return '';\n  return resp.output.map((item) => (item.content || []).map((c) => c.text || c.output_text || '').join('')).join('');\n}\nfunction parseJsonLoose(text) {\n  const cleaned = String(text || '').replace(/^\\`\\`\\`json\\s*/i, '').replace(/^\\`\\`\\`\\s*/i, '').replace(/\\`\\`\\`$/i, '').trim();\n  try { return JSON.parse(cleaned); } catch (error) {\n    const start = cleaned.indexOf('{');\n    const end = cleaned.lastIndexOf('}');\n    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));\n    throw error;\n  }\n}\nfunction pick(obj, keys, fallback = '') {\n  for (const key of keys) if (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key];\n  return fallback;\n}\nconst cfg = $items('初始化配置')[0].json;\nconst parsed = parseJsonLoose(textFromResponse($json));\nconst rawTopics = Array.isArray(parsed.topics) ? parsed.topics : [];\nif (rawTopics.length < 5) throw new Error('OpenAI没有返回5个选题。');\nconst topics = rawTopics.slice(0, 5).map((topic, index) => {\n  const heat = Number(pick(topic, ['热度分', 'heat_score'], 0));\n  const value = Number(pick(topic, ['转化价值分', 'conversion_score'], 0));\n  const total = Number(pick(topic, ['总分', 'total_score'], Math.round(heat * 0.6 + value * 0.4)));\n  return {\n    '日期': cfg.run_date,\n    '选题ID': pick(topic, ['选题ID', 'topic_id'], 'AI-' + cfg.run_date.replace(/-/g, '') + '-' + String(index + 1).padStart(2, '0')),\n    '选题标题': pick(topic, ['选题标题', 'title', 'topic'], ''),\n    '角度': pick(topic, ['角度', 'angle'], ''),\n    '目标人群': pick(topic, ['目标人群', 'target_audience'], ''),\n    '热点来源URL': String(pick(topic, ['热点来源URL', 'source_urls'], '')),\n    '热点摘要': pick(topic, ['热点摘要', 'summary'], ''),\n    '热度分': heat,\n    '转化价值分': value,\n    '总分': total,\n    '状态': pick(topic, ['状态', 'status'], '待生成视频'),\n  };\n}).sort((a, b) => Number(b['总分']) - Number(a['总分']));\nconst selectedId = parsed.selected_topic_id || parsed['selected_topic_id'] || parsed['选题ID'] || topics[0]['选题ID'];\nconst selected = topics.find((topic) => topic['选题ID'] === selectedId) || topics[0];\nconst script = parsed.script || {};\nconst forbidden = /(微信|weixin|wechat|vx|v信|手机号|电话|QQ|QQ群|邮箱|email|Telegram|WhatsApp|加我|进群|私信领资料|扫码)/i;\nconst risks = [];\nif (forbidden.test(JSON.stringify(script))) risks.push('疑似出现站外联系方式，请人工修改');\nconst scriptRow = {\n  '日期': cfg.run_date,\n  '脚本ID': pick(script, ['脚本ID', 'script_id'], 'SCRIPT-' + cfg.run_date.replace(/-/g, '') + '-01'),\n  '选题ID': selected['选题ID'],\n  '选题标题': selected['选题标题'],\n  '开头钩子': pick(script, ['开头钩子', 'opening_hook'], ''),\n  '正文脚本': pick(script, ['正文脚本', 'body_script', 'script'], ''),\n  '结尾引导': pick(script, ['结尾引导', 'ending_cta'], ''),\n  '标题': pick(script, ['标题', 'title'], selected['选题标题']),\n  '封面文案': pick(script, ['封面文案', 'cover_text'], ''),\n  '评论区引导语': pick(script, ['评论区引导语', 'comment_guide'], ''),\n  '事实来源URL': pick(script, ['事实来源URL', 'fact_source_urls'], selected['热点来源URL']),\n  '合规风险': [pick(script, ['合规风险', 'compliance_risk'], ''), ...risks].filter(Boolean).join('；') || '未发现明显风险，仍需人工审核',\n  '状态': risks.length ? '需要人工修改' : '待人工审核',\n};\nconst materialKeywords = Array.isArray(parsed.material_keywords) && parsed.material_keywords.length ? parsed.material_keywords : ['artificial intelligence technology'];\nreturn [{ json: { ...cfg, topics, selected_topic: selected, script_row: scriptRow, material_keywords: materialKeywords, search_query: materialKeywords[0] } }];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000006",
+      "name": "准备选题库行",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -940,
+        160
+      ],
+      "parameters": {
+        "jsCode": "return ($items('解析AI生成包')[0].json.topics || []).map((topic) => ({ json: topic }));"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000007",
+      "name": "Google Sheets 写入选题库",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -700,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "选题库",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json['日期'] }}",
+            "选题ID": "={{ $json['选题ID'] }}",
+            "选题标题": "={{ $json['选题标题'] }}",
+            "角度": "={{ $json['角度'] }}",
+            "目标人群": "={{ $json['目标人群'] }}",
+            "热点来源URL": "={{ $json['热点来源URL'] }}",
+            "热点摘要": "={{ $json['热点摘要'] }}",
+            "热度分": "={{ $json['热度分'] }}",
+            "转化价值分": "={{ $json['转化价值分'] }}",
+            "总分": "={{ $json['总分'] }}",
+            "状态": "={{ $json['状态'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000008",
+      "name": "回到生成包",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        160
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: $items('解析AI生成包')[0].json }];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000009",
+      "name": "Google Sheets 写入脚本库",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -220,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "脚本库",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json.script_row['日期'] }}",
+            "脚本ID": "={{ $json.script_row['脚本ID'] }}",
+            "选题ID": "={{ $json.script_row['选题ID'] }}",
+            "选题标题": "={{ $json.script_row['选题标题'] }}",
+            "开头钩子": "={{ $json.script_row['开头钩子'] }}",
+            "正文脚本": "={{ $json.script_row['正文脚本'] }}",
+            "结尾引导": "={{ $json.script_row['结尾引导'] }}",
+            "标题": "={{ $json.script_row['标题'] }}",
+            "封面文案": "={{ $json.script_row['封面文案'] }}",
+            "评论区引导语": "={{ $json.script_row['评论区引导语'] }}",
+            "事实来源URL": "={{ $json.script_row['事实来源URL'] }}",
+            "合规风险": "={{ $json.script_row['合规风险'] }}",
+            "状态": "={{ $json.script_row['状态'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000010",
+      "name": "Pexels 搜索授权视频",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        160
+      ],
+      "parameters": {
+        "url": "https://api.pexels.com/videos/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.search_query }}"
+            },
+            {
+              "name": "orientation",
+              "value": "portrait"
+            },
+            {
+              "name": "per_page",
+              "value": "5"
+            },
+            {
+              "name": "size",
+              "value": "large"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pexels API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000011",
+      "name": "选择授权素材",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const base = $items('回到生成包')[0].json;\nconst videos = Array.isArray($json.videos) ? $json.videos : [];\nconst video = videos[0];\nlet material = null;\nif (video) {\n  const files = Array.isArray(video.video_files) ? video.video_files : [];\n  const file = files\n    .filter((f) => String(f.file_type || '').includes('mp4') || String(f.link || '').includes('.mp4'))\n    .sort((a, b) => (b.height || 0) - (a.height || 0))[0] || files[0];\n  if (file && file.link) {\n    material = {\n      platform: 'Pexels',\n      asset_id: String(video.id || ''),\n      page_url: video.url || '',\n      download_url: file.link,\n      author: video.user && video.user.name ? video.user.name : '',\n      author_url: video.user && video.user.url ? video.user.url : '',\n      license_url: 'https://www.pexels.com/license/',\n      search_keyword: base.search_query,\n    };\n  }\n}\nif (!material) throw new Error('Pexels没有返回可用的授权竖版视频素材，请换关键词或检查Pexels Credential。');\nreturn [{ json: { ...base, material, material_status: '素材已找到' } }];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000012",
+      "name": "OpenAI TTS 生成配音",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini-tts', voice: 'coral', input: $json.script_row['正文脚本'], response_format: 'mp3' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "name": "OPENAI API KEY"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000013",
+      "name": "准备音频DataURI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const base = $items('选择授权素材')[0].json;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst binary = items[0].binary || {};\nbinary.data.fileName = base.script_row['脚本ID'] + '.mp3';\nbinary.data.mimeType = 'audio/mpeg';\nreturn [{\n  json: {\n    ...base,\n    audio_filename: base.script_row['脚本ID'] + '.mp3',\n    audio_data_uri: 'data:audio/mpeg;base64,' + buffer.toString('base64')\n  },\n  binary\n}];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000014",
+      "name": "上传配音到Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        980,
+        160
+      ],
+      "parameters": {
+        "name": "={{ $json.audio_filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "15Aq6nugl8cuYvNOtRu5Vu6SJeFduuBJt",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "GOOGLE DRIVE"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000015",
+      "name": "Creatomate 创建渲染",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.creatomate.com/v2/renders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ template_id: $node['准备音频DataURI'].json.template_id, modifications: { title_text: $node['准备音频DataURI'].json.script_row['标题'], subtitle_text: $node['准备音频DataURI'].json.script_row['正文脚本'], background_video: $node['准备音频DataURI'].json.material.download_url, voice_audio: $node['准备音频DataURI'].json.audio_data_uri, cta_text: $node['准备音频DataURI'].json.script_row['评论区引导语'], cover_text: $node['准备音频DataURI'].json.script_row['封面文案'] }, render_scale: 1, metadata: JSON.stringify({ run_id: $node['准备音频DataURI'].json.run_id, script_id: $node['准备音频DataURI'].json.script_row['脚本ID'] }) }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Creatomate API Key"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000016",
+      "name": "等待Creatomate渲染4分钟",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1460,
+        160
+      ],
+      "parameters": {
+        "amount": 4,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000017",
+      "name": "Creatomate 查询渲染状态",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        160
+      ],
+      "parameters": {
+        "url": "={{ 'https://api.creatomate.com/v2/renders/' + (($node['Creatomate 创建渲染'].json.id) || ($node['Creatomate 创建渲染'].json[0] && $node['Creatomate 创建渲染'].json[0].id) || '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Creatomate API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000018",
+      "name": "整理视频结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const base = $items('准备音频DataURI')[0].json;\nconst audioDrive = $items('上传配音到Drive')[0].json;\nconst createdRaw = $items('Creatomate 创建渲染')[0].json;\nconst created = Array.isArray(createdRaw) ? createdRaw[0] : createdRaw;\nconst statusRaw = $json || {};\nconst render = Array.isArray(statusRaw) ? statusRaw[0] : statusRaw;\nconst finalRender = render && render.id ? render : created;\nif (!finalRender || !finalRender.url) {\n  throw new Error('Creatomate还没有生成视频URL。当前状态：' + (finalRender && finalRender.status ? finalRender.status : 'unknown') + '。可以稍后在Creatomate里查看Render ID：' + (finalRender && finalRender.id ? finalRender.id : 'unknown'));\n}\nreturn [{ json: {\n  ...base,\n  audio_drive_id: audioDrive.id || '',\n  audio_drive_link: audioDrive.webViewLink || '',\n  render_id: finalRender.id || '',\n  render_status: finalRender.status || '',\n  render_url: finalRender.url || '',\n  snapshot_url: finalRender.snapshot_url || '',\n  video_id: 'VIDEO-' + base.run_date.replace(/-/g, '') + '-01',\n  video_filename: base.run_date + '_' + base.script_row['脚本ID'] + '_douyin_ai_draft.mp4',\n  report_filename: base.run_date + '_' + base.script_row['脚本ID'] + '_compliance_report.md'\n} }];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000019",
+      "name": "下载Creatomate视频",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2180,
+        160
+      ],
+      "parameters": {
+        "url": "={{ $json.render_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000020",
+      "name": "上传视频到Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2420,
+        160
+      ],
+      "parameters": {
+        "name": "={{ $node['整理视频结果'].json.video_filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1lNIHLzh2K8VQpmR1-mI2Sm1VaJABLfSR",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "GOOGLE DRIVE"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000021",
+      "name": "生成合规报告文件",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const result = $items('整理视频结果')[0].json;\nconst videoDrive = $items('上传视频到Drive')[0].json;\nconst lines = [\n  '# 抖音AI短视频草稿合规报告',\n  '',\n  '- 日期：' + result.run_date,\n  '- 视频ID：' + result.video_id,\n  '- 脚本ID：' + result.script_row['脚本ID'],\n  '- 视频标题：' + result.script_row['标题'],\n  '- Google Drive 视频链接：' + (videoDrive.webViewLink || ''),\n  '- 配音文件链接：' + result.audio_drive_link,\n  '- Creatomate Render ID：' + result.render_id,\n  '',\n  '## 发布前人工审核清单',\n  '',\n  '- [ ] 标题、字幕、封面、口播、评论区引导语没有微信号、手机号、QQ群、邮箱等站外联系方式。',\n  '- [ ] 没有承诺赚钱、暴富、保收益。',\n  '- [ ] 所有事实性内容都能在来源链接里找到。',\n  '- [ ] 素材来自 Pexels 授权素材库，并记录作者和授权说明。',\n  '- [ ] 视频为 1080x1920 竖版，字幕清晰。',\n  '- [ ] 人工确认后再发布到抖音，workflow 不自动发布。',\n  '',\n  '## 事实来源URL',\n  '',\n  result.script_row['事实来源URL'] || '',\n  '',\n  '## 素材信息',\n  '',\n  '- 来源：' + result.material.platform,\n  '- 作者：' + result.material.author,\n  '- 素材页：' + result.material.page_url,\n  '- 授权说明：' + result.material.license_url,\n  '',\n  '## 合规风险',\n  '',\n  result.script_row['合规风险'] || '未发现明显风险，仍需人工审核'\n];\nconst report = lines.join('\\n');\nreturn [{\n  json: { ...result, video_drive_id: videoDrive.id || '', video_drive_link: videoDrive.webViewLink || '', compliance_report: report },\n  binary: {\n    data: {\n      data: Buffer.from(report, 'utf8').toString('base64'),\n      mimeType: 'text/markdown',\n      fileName: result.report_filename\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000022",
+      "name": "上传合规报告到Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2900,
+        160
+      ],
+      "parameters": {
+        "name": "={{ $node['生成合规报告文件'].json.report_filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "18xvrfkSqsBPMcXQXjwuav2OZ4S1sTIlw",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "GOOGLE DRIVE"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000023",
+      "name": "Google Sheets 写入素材库",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3140,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "素材库",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $node['生成合规报告文件'].json.run_date }}",
+            "素材ID": "={{ $node['生成合规报告文件'].json.material.platform + '-' + $node['生成合规报告文件'].json.material.asset_id }}",
+            "脚本ID": "={{ $node['生成合规报告文件'].json.script_row['脚本ID'] }}",
+            "素材用途": "背景视频",
+            "关键词": "={{ $node['生成合规报告文件'].json.material.search_keyword }}",
+            "素材来源": "={{ $node['生成合规报告文件'].json.material.platform }}",
+            "作者": "={{ $node['生成合规报告文件'].json.material.author }}",
+            "授权说明": "={{ $node['生成合规报告文件'].json.material.license_url }}",
+            "素材链接": "={{ $node['生成合规报告文件'].json.material.page_url }}",
+            "本地或云端链接": "={{ $node['生成合规报告文件'].json.material.download_url }}",
+            "是否已使用": "是",
+            "对应视频ID": "={{ $node['生成合规报告文件'].json.video_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000024",
+      "name": "Google Sheets 写入视频成品",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3380,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "视频成品",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $node['生成合规报告文件'].json.run_date }}",
+            "视频ID": "={{ $node['生成合规报告文件'].json.video_id }}",
+            "脚本ID": "={{ $node['生成合规报告文件'].json.script_row['脚本ID'] }}",
+            "视频标题": "={{ $node['生成合规报告文件'].json.script_row['标题'] }}",
+            "视频链接": "={{ $node['生成合规报告文件'].json.video_drive_link }}",
+            "封面链接": "={{ $node['生成合规报告文件'].json.snapshot_url }}",
+            "配音链接": "={{ $node['生成合规报告文件'].json.audio_drive_link }}",
+            "字幕链接": "",
+            "审核状态": "待人工审核",
+            "修改意见": "发布前请检查合规报告和事实来源，不要自动发布抖音。",
+            "发布状态": "未发布",
+            "合规报告链接": "={{ $json.webViewLink || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000025",
+      "name": "准备任务日历行",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3620,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const result = $items('生成合规报告文件')[0].json;\nreturn [{ json: {\n  '日期': result.run_date,\n  '任务时间': result.run_time,\n  '任务类型': '02_每日AI视频草稿全流程',\n  '状态': 'success',\n  '负责人': 'n8n 自动化',\n  '备注': '视频草稿已保存到Google Drive：' + result.video_drive_link + '；发布状态：未发布；必须人工审核后再发抖音。'\n} }];"
+      }
+    },
+    {
+      "id": "02000000-0000-4000-8000-000000000026",
+      "name": "Google Sheets 写入任务日历",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3860,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "任务日历",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json['日期'] }}",
+            "任务时间": "={{ $json['任务时间'] }}",
+            "任务类型": "={{ $json['任务类型'] }}",
+            "状态": "={{ $json['状态'] }}",
+            "负责人": "={{ $json['负责人'] }}",
+            "备注": "={{ $json['备注'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "手动测试触发": {
+      "main": [
+        [
+          {
+            "node": "初始化配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger 每天8点15": {
+      "main": [
+        [
+          {
+            "node": "初始化配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "初始化配置": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 生成选题脚本包",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 生成选题脚本包": {
+      "main": [
+        [
+          {
+            "node": "解析AI生成包",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析AI生成包": {
+      "main": [
+        [
+          {
+            "node": "准备选题库行",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备选题库行": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入选题库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入选题库": {
+      "main": [
+        [
+          {
+            "node": "回到生成包",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回到生成包": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入脚本库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入脚本库": {
+      "main": [
+        [
+          {
+            "node": "Pexels 搜索授权视频",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pexels 搜索授权视频": {
+      "main": [
+        [
+          {
+            "node": "选择授权素材",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "选择授权素材": {
+      "main": [
+        [
+          {
+            "node": "OpenAI TTS 生成配音",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI TTS 生成配音": {
+      "main": [
+        [
+          {
+            "node": "准备音频DataURI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备音频DataURI": {
+      "main": [
+        [
+          {
+            "node": "上传配音到Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "上传配音到Drive": {
+      "main": [
+        [
+          {
+            "node": "Creatomate 创建渲染",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate 创建渲染": {
+      "main": [
+        [
+          {
+            "node": "等待Creatomate渲染4分钟",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "等待Creatomate渲染4分钟": {
+      "main": [
+        [
+          {
+            "node": "Creatomate 查询渲染状态",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate 查询渲染状态": {
+      "main": [
+        [
+          {
+            "node": "整理视频结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理视频结果": {
+      "main": [
+        [
+          {
+            "node": "下载Creatomate视频",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "下载Creatomate视频": {
+      "main": [
+        [
+          {
+            "node": "上传视频到Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "上传视频到Drive": {
+      "main": [
+        [
+          {
+            "node": "生成合规报告文件",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "生成合规报告文件": {
+      "main": [
+        [
+          {
+            "node": "上传合规报告到Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "上传合规报告到Drive": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入素材库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入素材库": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入视频成品",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入视频成品": {
+      "main": [
+        [
+          {
+            "node": "准备任务日历行",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备任务日历行": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入任务日历",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "Asia/Shanghai",
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "triggerCount": 0
+}
