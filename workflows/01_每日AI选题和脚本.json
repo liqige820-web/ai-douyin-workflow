@@ -104,7 +104,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "name": "OpenAI API密钥"
+          "id": "2fNO7x7dhHwzWyzn",
+          "name": "OPENAI API KEY"
         }
       }
     },
@@ -150,7 +151,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "name": "OpenAI API密钥"
+          "id": "2fNO7x7dhHwzWyzn",
+          "name": "OPENAI API KEY"
         }
       }
     },
@@ -225,7 +227,8 @@
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+          "id": "E16pS7JxERvldT48",
+          "name": "Google Sheets - ??AI?????????"
         }
       }
     },
@@ -271,7 +274,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "name": "OpenAI API密钥"
+          "id": "2fNO7x7dhHwzWyzn",
+          "name": "OPENAI API KEY"
         }
       }
     },
@@ -317,7 +321,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "name": "OpenAI API密钥"
+          "id": "2fNO7x7dhHwzWyzn",
+          "name": "OPENAI API KEY"
         }
       }
     },
@@ -381,7 +386,8 @@
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+          "id": "E16pS7JxERvldT48",
+          "name": "Google Sheets - ??AI?????????"
         }
       }
     },
@@ -438,7 +444,8 @@
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+          "id": "E16pS7JxERvldT48",
+          "name": "Google Sheets - ??AI?????????"
         }
       }
     }
