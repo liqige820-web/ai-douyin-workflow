@@ -139,6 +139,7 @@
       },
       "credentials": {
         "openAiApi": {
+          "id": "2fNO7x7dhHwzWyzn",
           "name": "OPENAI API KEY"
         }
       }
@@ -214,6 +215,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
+          "id": "E16pS7JxERvldT48",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }
@@ -278,6 +280,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
+          "id": "E16pS7JxERvldT48",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }
@@ -320,6 +323,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
+          "id": "M41PN870ml6YTEp3",
           "name": "Pexels API Key"
         }
       },
@@ -375,6 +379,7 @@
       },
       "credentials": {
         "openAiApi": {
+          "id": "2fNO7x7dhHwzWyzn",
           "name": "OPENAI API KEY"
         }
       }
@@ -417,6 +422,7 @@
       },
       "credentials": {
         "googleDriveOAuth2Api": {
+          "id": "WDvnmYloUeY7kLPn",
           "name": "GOOGLE DRIVE"
         }
       }
@@ -451,6 +457,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
+          "id": "jM3Xu8oUcv3OXfpE",
           "name": "Creatomate API Key"
         }
       }
@@ -486,6 +493,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
+          "id": "jM3Xu8oUcv3OXfpE",
           "name": "Creatomate API Key"
         }
       },
@@ -550,6 +558,7 @@
       },
       "credentials": {
         "googleDriveOAuth2Api": {
+          "id": "WDvnmYloUeY7kLPn",
           "name": "GOOGLE DRIVE"
         }
       }
@@ -592,6 +601,7 @@
       },
       "credentials": {
         "googleDriveOAuth2Api": {
+          "id": "WDvnmYloUeY7kLPn",
           "name": "GOOGLE DRIVE"
         }
       }
@@ -642,6 +652,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
+          "id": "E16pS7JxERvldT48",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }
@@ -692,6 +703,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
+          "id": "E16pS7JxERvldT48",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }
@@ -749,6 +761,7 @@
       },
       "credentials": {
         "googleSheetsOAuth2Api": {
+          "id": "E16pS7JxERvldT48",
           "name": "Google Sheets - 抖音AI短视频自动化工作台"
         }
       }

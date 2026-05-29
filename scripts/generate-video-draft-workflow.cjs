@@ -13,11 +13,11 @@ const FOLDERS = {
   report: '18xvrfkSqsBPMcXQXjwuav2OZ4S1sTIlw',
 };
 
-const openAiCredential = { openAiApi: { name: 'OPENAI API KEY' } };
-const sheetsCredential = { googleSheetsOAuth2Api: { name: 'Google Sheets - 抖音AI短视频自动化工作台' } };
-const driveCredential = { googleDriveOAuth2Api: { name: 'GOOGLE DRIVE' } };
-const pexelsCredential = { httpHeaderAuth: { name: 'Pexels API Key' } };
-const creatomateCredential = { httpHeaderAuth: { name: 'Creatomate API Key' } };
+const openAiCredential = { openAiApi: { id: '2fNO7x7dhHwzWyzn', name: 'OPENAI API KEY' } };
+const sheetsCredential = { googleSheetsOAuth2Api: { id: 'E16pS7JxERvldT48', name: 'Google Sheets - 抖音AI短视频自动化工作台' } };
+const driveCredential = { googleDriveOAuth2Api: { id: 'WDvnmYloUeY7kLPn', name: 'GOOGLE DRIVE' } };
+const pexelsCredential = { httpHeaderAuth: { id: 'M41PN870ml6YTEp3', name: 'Pexels API Key' } };
+const creatomateCredential = { httpHeaderAuth: { id: 'jM3Xu8oUcv3OXfpE', name: 'Creatomate API Key' } };
 
 function node(id, name, type, typeVersion, position, parameters, extra = {}) {
   return { id, name, type, typeVersion, position, parameters, ...extra };
