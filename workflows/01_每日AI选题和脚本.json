@@ -1,0 +1,624 @@
+{
+  "name": "01_每日AI选题和脚本",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "01010101-0101-4101-8101-010101010101",
+      "name": "Schedule Trigger 每天8点",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "run-date",
+              "name": "run_date",
+              "value": "={{ $now.setZone('Asia/Shanghai').toFormat('yyyy-LL-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "run-time",
+              "name": "run_time",
+              "value": "={{ $now.setZone('Asia/Shanghai').toFormat('HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "run-id",
+              "name": "run_id",
+              "value": "={{ 'ai-topic-script-' + $now.setZone('Asia/Shanghai').toFormat('yyyyLLdd-HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "timezone",
+              "name": "timezone",
+              "value": "Asia/Shanghai",
+              "type": "string"
+            },
+            {
+              "id": "spreadsheet-id",
+              "name": "spreadsheet_id",
+              "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+              "type": "string"
+            },
+            {
+              "id": "manual-review",
+              "name": "manual_review_required",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "02020202-0202-4202-8202-020202020202",
+      "name": "初始化运行信息",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5-mini', tools: [{ type: 'web_search', search_context_size: 'medium', user_location: { type: 'approximate', country: 'CN', timezone: 'Asia/Shanghai' } }], tool_choice: 'auto', include: ['web_search_call.action.sources'], max_output_tokens: 4000, instructions: '你是中文短视频选题研究员。你必须联网核验事实，保留来源链接，不编造信息。输出必须是可解析的JSON，不要Markdown。', input: '今天是北京时间 ' + $json.run_date + '。请搜索今天和最近72小时内的人工智能热点，优先关注AI产品、模型发布、AI应用、AI监管、AI商业化、AI工具更新。请返回JSON：{\"date\":\"YYYY-MM-DD\",\"hotspots\":[{\"title\":\"热点标题\",\"summary\":\"100字内摘要\",\"why_hot\":\"为什么值得关注\",\"source_urls\":[{\"title\":\"来源标题\",\"url\":\"https://...\",\"publisher\":\"媒体或官网\",\"published_at\":\"发布日期\"}]}]}。要求至少5个热点，每个热点至少1个来源链接。' }) }}"
+      },
+      "id": "03030303-0303-4303-8303-030303030303",
+      "name": "OpenAI 联网搜索",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1200,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI API密钥"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function textFromResponse(resp) { if (typeof resp.output_text === 'string') return resp.output_text; if (!Array.isArray(resp.output)) return ''; return resp.output.map((item) => (item.content || []).map((c) => c.text || c.output_text || '').join('')).join(''); }\nfunction parseJsonLoose(text) { const cleaned = String(text || '').replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim(); try { return JSON.parse(cleaned); } catch (error) { const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}'); if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1)); throw error; } }\nconst run = $items('初始化运行信息')[0].json;\nconst parsed = parseJsonLoose(textFromResponse($json));\nconst hotspots = Array.isArray(parsed.hotspots) ? parsed.hotspots : (Array.isArray(parsed['热点']) ? parsed['热点'] : []);\nif (hotspots.length === 0) throw new Error('OpenAI 联网搜索没有返回 hotspots 数组，请打开上一个节点查看原始输出。');\nreturn [{ json: { ...run, search_result: parsed, hotspots } }];"
+      },
+      "id": "04040404-0404-4404-8404-040404040404",
+      "name": "解析搜索结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5-mini', max_output_tokens: 3500, instructions: '你是抖音AI知识博主的选题策划。你只输出JSON，不要Markdown。不要出现微信号、手机号、QQ群、邮箱、Telegram、WhatsApp等站外联系方式。不要承诺赚钱。不要编造事实。', input: '运行日期：' + $json.run_date + '。请根据下面联网搜索到的AI热点，生成5个适合抖音45-60秒中文短视频的选题。每个选题必须保留热点来源URL。评分规则：热度分0-100，转化价值分0-100，总分=热度分*0.6+转化价值分*0.4，四舍五入。只返回JSON：{\"topics\":[{\"日期\":\"' + $json.run_date + '\",\"选题ID\":\"AI-' + $json.run_date.replace(/-/g, '') + '-01\",\"选题标题\":\"\",\"角度\":\"\",\"目标人群\":\"\",\"热点来源URL\":\"多个URL用换行分隔\",\"热点摘要\":\"\",\"热度分\":0,\"转化价值分\":0,\"总分\":0,\"状态\":\"待生成脚本\"}]}。搜索结果：' + JSON.stringify($json.search_result) }) }}"
+      },
+      "id": "05050505-0505-4505-8505-050505050505",
+      "name": "OpenAI 选题生成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -720,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI API密钥"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function textFromResponse(resp) { if (typeof resp.output_text === 'string') return resp.output_text; if (!Array.isArray(resp.output)) return ''; return resp.output.map((item) => (item.content || []).map((c) => c.text || c.output_text || '').join('')).join(''); }\nfunction parseJsonLoose(text) { const cleaned = String(text || '').replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim(); try { return JSON.parse(cleaned); } catch (error) { const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}'); if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1)); throw error; } }\nfunction pick(obj, keys, fallback = '') { for (const key of keys) if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key]; return fallback; }\nconst base = $items('解析搜索结果')[0].json;\nconst parsed = parseJsonLoose(textFromResponse($json));\nconst rawTopics = Array.isArray(parsed.topics) ? parsed.topics : (Array.isArray(parsed['选题']) ? parsed['选题'] : []);\nif (rawTopics.length < 5) throw new Error('OpenAI 选题生成返回不足5个选题，请打开上一个节点检查输出。');\nconst topics = rawTopics.slice(0, 5).map((topic, index) => {\n  const heat = Number(pick(topic, ['热度分', 'heat_score', 'heatScore'], 0));\n  const value = Number(pick(topic, ['转化价值分', 'conversion_score', 'conversionValueScore'], 0));\n  const total = Number(pick(topic, ['总分', 'total_score', 'totalScore'], Math.round(heat * 0.6 + value * 0.4)));\n  const source = pick(topic, ['热点来源URL', 'source_urls', 'sourceLinks'], '');\n  const sourceText = Array.isArray(source) ? source.map((s) => typeof s === 'string' ? s : (s.url || '')).filter(Boolean).join('\\n') : String(source || '');\n  return {\n    '日期': base.run_date,\n    '选题ID': pick(topic, ['选题ID', 'topic_id'], 'AI-' + base.run_date.replace(/-/g, '') + '-' + String(index + 1).padStart(2, '0')),\n    '选题标题': pick(topic, ['选题标题', 'title', 'topic'], ''),\n    '角度': pick(topic, ['角度', 'angle'], ''),\n    '目标人群': pick(topic, ['目标人群', 'target_audience'], ''),\n    '热点来源URL': sourceText,\n    '热点摘要': pick(topic, ['热点摘要', 'summary'], ''),\n    '热度分': heat,\n    '转化价值分': value,\n    '总分': total,\n    '状态': pick(topic, ['状态', 'status'], '待生成脚本')\n  };\n});\ntopics.sort((a, b) => Number(b['总分']) - Number(a['总分']));\nreturn [{ json: { ...base, topics } }];"
+      },
+      "id": "06060606-0606-4606-8606-060606060606",
+      "name": "解析选题",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const topics = $items('解析选题')[0].json.topics || [];\nreturn topics.map((topic) => ({ json: topic }));"
+      },
+      "id": "07070707-0707-4707-8707-070707070707",
+      "name": "准备选题库行",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "选题库",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json['日期'] }}",
+            "选题ID": "={{ $json['选题ID'] }}",
+            "选题标题": "={{ $json['选题标题'] }}",
+            "角度": "={{ $json['角度'] }}",
+            "目标人群": "={{ $json['目标人群'] }}",
+            "热点来源URL": "={{ $json['热点来源URL'] }}",
+            "热点摘要": "={{ $json['热点摘要'] }}",
+            "热度分": "={{ $json['热度分'] }}",
+            "转化价值分": "={{ $json['转化价值分'] }}",
+            "总分": "={{ $json['总分'] }}",
+            "状态": "={{ $json['状态'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "08080808-0808-4808-8808-080808080808",
+      "name": "Google Sheets 写入选题库",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $items('解析选题')[0].json }];"
+      },
+      "id": "09090909-0909-4909-8909-090909090909",
+      "name": "回到选题汇总",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5-mini', max_output_tokens: 1200, instructions: '你是短视频主编。只输出JSON，不要Markdown。必须选择总分最高的1个选题；如果并列，选择事实来源更清楚、更适合知识口播的。', input: '请从下面5个选题中选择总分最高的1个用于生成脚本。只返回JSON：{\"selected_topic_id\":\"\",\"selected_title\":\"\",\"selected_total_score\":0,\"reason\":\"\"}。选题列表：' + JSON.stringify($json.topics) }) }}"
+      },
+      "id": "10101010-1010-4010-8010-101010101010",
+      "name": "OpenAI 选择最高分选题",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI API密钥"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function textFromResponse(resp) { if (typeof resp.output_text === 'string') return resp.output_text; if (!Array.isArray(resp.output)) return ''; return resp.output.map((item) => (item.content || []).map((c) => c.text || c.output_text || '').join('')).join(''); }\nfunction parseJsonLoose(text) { const cleaned = String(text || '').replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim(); try { return JSON.parse(cleaned); } catch (error) { const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}'); if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1)); throw error; } }\nconst base = $items('回到选题汇总')[0].json;\nlet selection = {};\ntry { selection = parseJsonLoose(textFromResponse($json)); } catch (error) { selection = {}; }\nconst topics = base.topics || [];\nconst pickedId = selection.selected_topic_id || selection['选题ID'] || '';\nconst selected = topics.find((topic) => topic['选题ID'] === pickedId) || topics.slice().sort((a, b) => Number(b['总分']) - Number(a['总分']))[0];\nif (!selected) throw new Error('没有可用的最高分选题。');\nreturn [{ json: { ...base, selected_topic: selected, selection_reason: selection.reason || '按总分最高自动选择' } }];"
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "解析最高分选题",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5-mini', tools: [{ type: 'web_search', search_context_size: 'low', user_location: { type: 'approximate', country: 'CN', timezone: 'Asia/Shanghai' } }], tool_choice: 'auto', include: ['web_search_call.action.sources'], max_output_tokens: 4500, instructions: '你是抖音中文AI知识博主的脚本编辑。输出必须是JSON，不要Markdown。不能出现微信号、手机号、QQ群、邮箱、Telegram、WhatsApp、加我、进群等站外联系方式。不能承诺赚钱、暴富、保收益。不能编造事实。事实内容必须保留来源链接。', input: '请为下面最高分选题生成45-60秒中文抖音口播脚本。结构必须是：0-3秒强钩子；3-10秒痛点；10-40秒3个观点；40-52秒案例；52-60秒评论区引导。评论区引导只能引导用户在抖音站内评论，不能引导私信或站外联系。只返回JSON：{\"日期\":\"' + $json.run_date + '\",\"脚本ID\":\"SCRIPT-' + $json.run_date.replace(/-/g, '') + '-01\",\"选题ID\":\"' + $json.selected_topic['选题ID'] + '\",\"选题标题\":\"' + $json.selected_topic['选题标题'] + '\",\"开头钩子\":\"\",\"正文脚本\":\"按时间段写完整口播正文\",\"结尾引导\":\"\",\"标题\":\"\",\"封面文案\":\"\",\"评论区引导语\":\"\",\"事实来源URL\":\"多个URL用换行分隔\",\"合规风险\":\"\",\"状态\":\"待人工审核\"}。最高分选题：' + JSON.stringify($json.selected_topic) + '。可用事实来源：' + $json.selected_topic['热点来源URL'] }) }}"
+      },
+      "id": "12121212-1212-4212-8212-121212121212",
+      "name": "OpenAI 生成脚本",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI API密钥"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function textFromResponse(resp) { if (typeof resp.output_text === 'string') return resp.output_text; if (!Array.isArray(resp.output)) return ''; return resp.output.map((item) => (item.content || []).map((c) => c.text || c.output_text || '').join('')).join(''); }\nfunction parseJsonLoose(text) { const cleaned = String(text || '').replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim(); try { return JSON.parse(cleaned); } catch (error) { const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}'); if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1)); throw error; } }\nfunction pick(obj, keys, fallback = '') { for (const key of keys) if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') return obj[key]; return fallback; }\nconst base = $items('解析最高分选题')[0].json;\nconst parsed = parseJsonLoose(textFromResponse($json));\nconst selected = base.selected_topic;\nconst combinedText = JSON.stringify(parsed);\nconst forbidden = /(微信|weixin|wechat|vx|v信|手机号|电话|QQ|QQ群|邮箱|email|Telegram|WhatsApp|加我|进群|私信领资料|扫码)/i;\nconst risks = [];\nif (forbidden.test(combinedText)) risks.push('疑似出现站外联系方式，请人工修改');\nconst sourceUrls = String(pick(parsed, ['事实来源URL', 'fact_source_urls', 'sources'], selected['热点来源URL'] || '')).trim() || selected['热点来源URL'];\nif (!sourceUrls) risks.push('缺少事实来源链接');\nconst scriptRow = {\n  '日期': base.run_date,\n  '脚本ID': pick(parsed, ['脚本ID', 'script_id'], 'SCRIPT-' + base.run_date.replace(/-/g, '') + '-01'),\n  '选题ID': selected['选题ID'],\n  '选题标题': selected['选题标题'],\n  '开头钩子': pick(parsed, ['开头钩子', 'opening_hook'], ''),\n  '正文脚本': pick(parsed, ['正文脚本', 'body_script', 'script'], ''),\n  '结尾引导': pick(parsed, ['结尾引导', 'ending_cta'], ''),\n  '标题': pick(parsed, ['标题', 'title'], selected['选题标题']),\n  '封面文案': pick(parsed, ['封面文案', 'cover_text'], ''),\n  '评论区引导语': pick(parsed, ['评论区引导语', 'comment_guide'], ''),\n  '事实来源URL': sourceUrls,\n  '合规风险': [pick(parsed, ['合规风险', 'compliance_risk'], ''), ...risks].filter(Boolean).join('；') || '未发现明显风险，仍需人工审核',\n  '状态': risks.length ? '需要人工修改' : '待人工审核'\n};\nreturn [{ json: { ...base, script_row: scriptRow } }];"
+      },
+      "id": "13131313-1313-4313-8313-131313131313",
+      "name": "解析脚本",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "脚本库",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json.script_row['日期'] }}",
+            "脚本ID": "={{ $json.script_row['脚本ID'] }}",
+            "选题ID": "={{ $json.script_row['选题ID'] }}",
+            "选题标题": "={{ $json.script_row['选题标题'] }}",
+            "开头钩子": "={{ $json.script_row['开头钩子'] }}",
+            "正文脚本": "={{ $json.script_row['正文脚本'] }}",
+            "结尾引导": "={{ $json.script_row['结尾引导'] }}",
+            "标题": "={{ $json.script_row['标题'] }}",
+            "封面文案": "={{ $json.script_row['封面文案'] }}",
+            "评论区引导语": "={{ $json.script_row['评论区引导语'] }}",
+            "事实来源URL": "={{ $json.script_row['事实来源URL'] }}",
+            "合规风险": "={{ $json.script_row['合规风险'] }}",
+            "状态": "={{ $json.script_row['状态'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "14141414-1414-4414-8414-141414141414",
+      "name": "Google Sheets 写入脚本库",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1440,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $items('解析脚本')[0].json;\nconst selected = base.selected_topic;\nconst script = base.script_row;\nreturn [{ json: {\n  '日期': base.run_date,\n  '任务时间': base.run_time,\n  '任务类型': '01_每日AI选题和脚本',\n  '状态': 'success',\n  '负责人': 'n8n 自动化',\n  '备注': '已生成5个选题并写入选题库；最高分选题：' + selected['选题标题'] + '；脚本ID：' + script['脚本ID'] + '；脚本状态：' + script['状态'] + '；发布前必须人工审核。'\n} }];"
+      },
+      "id": "15151515-1515-4515-8515-151515151515",
+      "name": "准备任务日历行",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1o3kaVQSpqxuIzTbbPAgLk1x2RPXGJcyyk2zw2WIDO_w",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "任务日历",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "日期": "={{ $json['日期'] }}",
+            "任务时间": "={{ $json['任务时间'] }}",
+            "任务类型": "={{ $json['任务类型'] }}",
+            "状态": "={{ $json['状态'] }}",
+            "负责人": "={{ $json['负责人'] }}",
+            "备注": "={{ $json['备注'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "16161616-1616-4616-8616-161616161616",
+      "name": "Google Sheets 写入任务日历",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1920,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets - 抖音AI短视频自动化工作台"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger 每天8点": {
+      "main": [
+        [
+          {
+            "node": "初始化运行信息",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "初始化运行信息": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 联网搜索",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 联网搜索": {
+      "main": [
+        [
+          {
+            "node": "解析搜索结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析搜索结果": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 选题生成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 选题生成": {
+      "main": [
+        [
+          {
+            "node": "解析选题",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析选题": {
+      "main": [
+        [
+          {
+            "node": "准备选题库行",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备选题库行": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入选题库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入选题库": {
+      "main": [
+        [
+          {
+            "node": "回到选题汇总",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回到选题汇总": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 选择最高分选题",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 选择最高分选题": {
+      "main": [
+        [
+          {
+            "node": "解析最高分选题",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析最高分选题": {
+      "main": [
+        [
+          {
+            "node": "OpenAI 生成脚本",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI 生成脚本": {
+      "main": [
+        [
+          {
+            "node": "解析脚本",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析脚本": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入脚本库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets 写入脚本库": {
+      "main": [
+        [
+          {
+            "node": "准备任务日历行",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备任务日历行": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets 写入任务日历",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "Asia/Shanghai",
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "triggerCount": 0
+}
